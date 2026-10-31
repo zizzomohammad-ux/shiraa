@@ -1,0 +1,44 @@
+name: Build Shiraa
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack project
+        run: unzip -o shiraa.zip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.9
+      - name: Restore signing key
+        id: key
+        uses: actions/cache@v4
+        with:
+          path: app/shiraa.keystore
+          key: shiraa-keystore-v1
+      - name: Create signing key if missing
+        if: steps.key.outputs.cache-hit != 'true'
+        run: |
+          keytool -genkeypair -v -keystore app/shiraa.keystore -alias shiraa -keyalg RSA -keysize 2048 -validity 10000 -storepass shiraa123 -keypass shiraa123 -dname "CN=Shiraa"
+      - name: Build APK
+        env:
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
+          MDBLIST_KEY: ${{ secrets.MDBLIST_KEY }}
+        run: gradle assembleRelease
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk shiraa.apk
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Shiraa latest
+          files: shiraa.apk
